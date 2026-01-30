@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализатор латинской поэзии</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Анализатор латинской поэзии</h1>
+        
+        <div class="input-section">
+            <label for="reference">Эталонный текст с долготами:</label>
+            <textarea id="reference" placeholder="Ētsī me ādsĭdŭō cōnfēctūm cūră dŏlōrĕ"></textarea>
+            
+            <label for="plain">Текст без долгот:</label>
+            <textarea id="plain" placeholder="Etsi me adsiduo confectum cura dolore"></textarea>
+            
+            <button id="analyze">Проанализировать</button>
+        </div>
+        
+        <div class="output-section">
+            <h2>Результат с ударениями:</h2>
+            <div id="output"></div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
