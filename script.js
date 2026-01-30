@@ -1,196 +1,148 @@
-// Карта диакритических знаков для долготы/краткости
-const macronMap = {
-    'Ā': 'A', 'ā': 'a',
-    'Ē': 'E', 'ē': 'e',
-    'Ī': 'I', 'ī': 'i',
-    'Ō': 'O', 'ō': 'o',
-    'Ū': 'U', 'ū': 'u',
-    'Ȳ': 'Y', 'ȳ': 'y'
-};
-
-const breveMap = {
-    'Ă': 'A', 'ă': 'a',
-    'Ĕ': 'E', 'ĕ': 'e',
-    'Ĭ': 'I', 'ĭ': 'i',
-    'Ŏ': 'O', 'ŏ': 'o',
-    'Ŭ': 'U', 'ŭ': 'u',
-    'Ў': 'Y', 'ў': 'y'
-};
-
-const allDiacritics = {...macronMap, ...breveMap};
+// Нормализуем текст (приводим к единому стандарту Unicode NFC)
+function normalizeInput(text) {
+    return text ? text.normalize('NFC') : '';
+}
 
 // Проверка, является ли символ долгим гласным
+// Добавлены все возможные варианты макронов и циркумфлексов (ŷ)
+const longVowelsList = ['Ā','ā','Ē','ē','Ī','ī','Ō','ō','Ū','ū','Ȳ','ȳ','Ŷ','ŷ'];
+
 function isLongVowel(char) {
-    return char in macronMap;
+    return longVowelsList.includes(char);
 }
 
-// Проверка, является ли символ гласным (любым)
+// Проверка, является ли символ гласным
 function isVowel(char) {
-    return /[AEIOUYaeiouyĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭЎў]/i.test(char);
+    // Используем NFD декомпозицию для проверки базовой буквы
+    const base = char.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    return "AEIOUY".includes(base);
 }
 
-// Удаление диакритики
+// Умная очистка текста от диакритики (удаляет ударения, макроны, бреве)
 function removeDiacritics(text) {
-    return text.split('').map(char => allDiacritics[char] || char).join('');
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC");
 }
 
-// Нормализация текста
-function normalizeText(text) {
-    return text.trim();
-}
-
-// Разбивка на слова с сохранением позиции
-function tokenize(text) {
-    const tokens = [];
-    const regex = /[A-Za-zĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭЎў‹›]+|[^A-Za-zĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭЎў‹›\s]+|\s+/g;
-    let match;
-    
-    while ((match = regex.exec(text)) !== null) {
-        tokens.push({
-            text: match[0],
-            isWord: /[A-Za-zĀāĒēĪīŌōŪūȲȳĂăĔĕĬĭŎŏŬŭЎў‹›]/.test(match[0])
-        });
-    }
-    
-    return tokens;
-}
-
-// Поиск позиции первого долгого гласного в слове
-function findFirstLongVowelPosition(refWord) {
-    for (let i = 0; i < refWord.length; i++) {
-        if (isLongVowel(refWord[i])) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// Получение индекса гласной по позиции символа
-function getVowelIndexAtPosition(word, charPosition) {
-    let vowelCount = 0;
-    for (let i = 0; i <= charPosition && i < word.length; i++) {
-        if (isVowel(word[i])) {
-            if (i === charPosition) {
-                return vowelCount;
-            }
-            vowelCount++;
-        }
-    }
-    return -1;
-}
-
-// Применение ударения к гласной по её индексу
-function applyStressByVowelIndex(plainWord, vowelIndex) {
-    if (vowelIndex === -1) {
-        return plainWord;
-    }
-    
-    let result = '';
-    let currentVowelIndex = 0;
-    
-    for (let i = 0; i < plainWord.length; i++) {
-        const char = plainWord[i];
-        
-        if (isVowel(char)) {
-            if (currentVowelIndex === vowelIndex) {
-                result += `<span class="stressed">${char}</span>`;
-            } else {
-                result += char;
-            }
-            currentVowelIndex++;
-        } else {
-            result += char;
-        }
-    }
-    
-    return result;
-}
-
-// Проверка, содержит ли строка разделитель (четная строка)
-function hasCaesura(line) {
-    return line.includes('‖') || line.includes('||');
+// Проверка на наличие цезуры (разделителя в пентаметре)
+function isPentameter(line) {
+    // Ищем двойную палочку ‖ или обычную |
+    return line.includes('‖') || line.includes('|');
 }
 
 // Основная функция анализа
 function analyzePoetry(referenceText, inputText) {
+    // Нормализация входных данных
+    referenceText = normalizeInput(referenceText);
+    inputText = normalizeInput(inputText);
+
     const refLines = referenceText.split('\n');
     const inputLines = inputText.split('\n');
     
     const outputLines = [];
     
     for (let lineIdx = 0; lineIdx < Math.max(refLines.length, inputLines.length); lineIdx++) {
-        const refLine = refLines[lineIdx] ? normalizeText(refLines[lineIdx]) : '';
-        const inputLine = inputLines[lineIdx] ? normalizeText(inputLines[lineIdx]) : '';
+        // Берем строки, убираем лишние пробелы по краям
+        const refLine = refLines[lineIdx] ? refLines[lineIdx].trim() : '';
+        const inputLine = inputLines[lineIdx] ? inputLines[lineIdx].trim() : '';
         
-        if (!refLine || !inputLine) {
+        // Если строки пустые, просто добавляем пустую строку
+        if (!refLine && !inputLine) {
+            outputLines.push('');
+            continue;
+        }
+
+        // Если нет reference, возвращаем просто очищенный input
+        if (!refLine) {
             outputLines.push(removeDiacritics(inputLine));
             continue;
         }
+
+        // Логика: если есть палочка (пентаметр/четная строка) -> НЕ ставим ударения
+        // Если палочки нет (гекзаметр/нечетная строка) -> ставим ударения
+        const shouldStress = !isPentameter(refLine);
         
-        // Четные строки (с палочками) - не ставим ударения
-        const isEvenLine = hasCaesura(refLine);
+        let outputLineHtml = '';
         
-        const refTokens = tokenize(refLine);
-        const inputTokens = tokenize(inputLine);
+        // Регулярное выражение для поиска СЛОВ (использует Unicode Property Escapes \p{L})
+        // Это захватывает любые буквы, включая ā, ŷ, ē и т.д.
+        const wordRegex = /[\p{L}]+/gu; 
         
-        let outputLine = '';
-        let refWordIndex = 0;
-        
-        // Обработка токенов
-        for (let i = 0; i < inputTokens.length; i++) {
-            const inputToken = inputTokens[i];
-            
-            if (!inputToken.isWord) {
-                outputLine += removeDiacritics(inputToken.text);
-                continue;
+        let match;
+        let lastIndex = 0;
+        let refWords = refLine.match(wordRegex) || [];
+        let wordCounter = 0;
+
+        // Проходим по словам в INPUT строке
+        // Мы используем replace с функцией, чтобы собрать строку обратно с сохранением пунктуации
+        outputLineHtml = inputLine.replace(wordRegex, (plainWord) => {
+            // plainWord - это слово из второго поля (например "Etsi" или "Ētsī")
+            // Нам нужно найти соответствующее слово в reference
+            const refWord = refWords[wordCounter];
+            wordCounter++;
+
+            // Сразу очищаем слово для вывода (чтобы убрать долготы, если они были во втором поле)
+            const cleanWord = removeDiacritics(plainWord);
+
+            // Если мы не должны ставить ударения (четная строка) или слова закончились
+            if (!shouldStress || !refWord) {
+                return cleanWord;
             }
-            
-            // Очистить слово от диакритики
-            const plainWord = removeDiacritics(inputToken.text);
-            
-            // Найти соответствующее слово в эталоне
-            let refWord = null;
-            while (refWordIndex < refTokens.length) {
-                if (refTokens[refWordIndex].isWord) {
-                    refWord = refTokens[refWordIndex].text;
-                    refWordIndex++;
-                    break;
+
+            // Ищем первую долгую гласную в ETALON слове (refWord)
+            let longVowelIndex = -1; // Индекс гласной (0 - первая гласная, 1 - вторая...)
+            let vowelCounter = 0;
+
+            for (const char of refWord) {
+                if (isVowel(char)) {
+                    if (isLongVowel(char)) {
+                        longVowelIndex = vowelCounter;
+                        break; // Нашли первую долгую, выходим
+                    }
+                    vowelCounter++;
                 }
-                refWordIndex++;
             }
-            
-            if (!refWord || isEvenLine) {
-                outputLine += plainWord;
-                continue;
+
+            // Если долгой гласной нет
+            if (longVowelIndex === -1) {
+                return cleanWord;
             }
+
+            // Применяем ударение к cleanWord
+            let resultWord = '';
+            let currentVowelCount = 0;
             
-            // Найти первый долгий гласный
-            const longVowelPos = findFirstLongVowelPosition(refWord);
-            
-            if (longVowelPos !== -1) {
-                const vowelIndex = getVowelIndexAtPosition(refWord, longVowelPos);
-                outputLine += applyStressByVowelIndex(plainWord, vowelIndex);
-            } else {
-                outputLine += plainWord;
+            for (const char of cleanWord) {
+                if (isVowel(char)) {
+                    if (currentVowelCount === longVowelIndex) {
+                        resultWord += `<span class="stressed">${char}</span>`;
+                    } else {
+                        resultWord += char;
+                    }
+                    currentVowelCount++;
+                } else {
+                    resultWord += char;
+                }
             }
-        }
-        
-        outputLines.push(outputLine);
+
+            return resultWord;
+        });
+
+        outputLines.push(outputLineHtml);
     }
     
     return outputLines.join('\n');
 }
 
-// Обработчик события
+// Привязка к кнопке
 document.getElementById('analyze').addEventListener('click', () => {
-    const referenceText = document.getElementById('reference').value;
-    const inputText = document.getElementById('plain').value;
+    const ref = document.getElementById('reference').value;
+    const inp = document.getElementById('plain').value;
     
-    if (!referenceText || !inputText) {
-        alert('Пожалуйста, заполните оба поля!');
-        return;
-    }
+    if(!ref) return;
+
+    // Если второе поле пустое, используем первое как источник
+    const textToProcess = inp || ref;
     
-    const result = analyzePoetry(referenceText, inputText);
-    document.getElementById('output').innerHTML = result;
+    const res = analyzePoetry(ref, textToProcess);
+    document.getElementById('output').innerHTML = res;
 });
